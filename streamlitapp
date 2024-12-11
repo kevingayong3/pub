@@ -1,0 +1,331 @@
+import streamlit as st
+import pandas as pd
+import os
+global detaildataframe
+import atexit
+from openpyxl import load_workbook
+from streamlit.components.v1 import html
+
+class MyData:
+    def __init__(self):
+        self.tag = ''
+        self.financeCode = ''
+        self.borrowing = ''
+        self.money = ''
+        self.projectCode = ''
+        self.projectName = ''
+        self.bumen = ''
+        self.name = ''
+        self.typeCode = 0
+        self.secondType = ''
+
+    def __str__(self):
+        return f'(tag={self.tag}, financeCode={self.financeCode}, borrowing={self.borrowing}, money={self.money}, projectCode={self.projectCode}, projectName={self.projectName}, bumen={self.bumen}, name={self.name}, typeCode={self.typeCode},secondType={self.secondType})'
+
+
+
+def process(file_path):
+    bumen_type = ""
+    detail = []
+    # 先处理sheet2
+
+    fd = pd.read_excel(file_path, sheet_name='科技费用分摊明细表')
+    # 获取DataFrame对象的行数和行索引
+    rows, cols = fd.shape
+    index = fd.index
+
+    # 定义最后一行的行号
+    lastRow = rows - 1
+
+    # 设置常量
+    fileName = fd.columns[0]
+    month = fileName[0:8]
+    #bumem_tmp = fileName.replace("_", "/")
+    bumem_tmp = fileName
+    bumen = bumem_tmp.split("（")[1][0:-1]
+
+    sheet2ColCode = ['', '', '', '6605', '530101010101', '53010101010301',
+                     '53010101010303', '53010101010304', '53010101020101',
+                     '53010101020103', '530101010110', '5301010302', '5301010302', '53010106',
+                     '', '', '', '', '', '', '']
+
+
+    code_for_bumen = {"电网工程公司": "GNFDUHS00001", "国际工程公司": "GNFDUHS00002", "工程经济研究院": "GNFDUHS00003",
+                      "数智工程研究院": "GNFDUHS00004",
+                      "电力规划研究院": "GNFDUHS00005", "新能源规划研究院": "GNFDUHS00006",
+                      "能源工程公司": "GNFDUHS00007", "勘测工程公司_地理信息公司": "GNFDUHS00009",
+                      "工程建设公司": "GNZCB00001", "科技质量部/技术研究中心": "GNFDUHS00011","科技质量部_技术研究中心": "GNFDUHS00011","市场经营部_投资部": "GNFDUHS00011",
+                      "综合服务中心": "GNFDUHS00011", "信息中心": "GNFDUHS00011", "安全环保部": "GNFDUHS00011",
+                      "办公室/董事会办公室/企业发展部": "GNFDUHS00011","办公室_董事会办公室_企业发展部": "GNFDUHS00011", "西北分公司": "GNFDUHS00011"}
+
+    # 设置行头
+    projectCode = {}
+    projectName = {}
+    for i in range(3, lastRow - 1):
+        projectCode[i] = fd.iloc[i, 1]
+        projectName[i] = fd.iloc[i, 2]
+
+    # 遍历Excel文件中指定范围内的所有数据，非合计部分
+    for i in range(3, lastRow - 1):
+        for j in range(4, 22):
+            # 获取单元格的值
+            cell_value = fd.iloc[i, j]
+            #        print(cell_value)
+            if not pd.isna(cell_value):
+                if cell_value == 0:
+                    continue
+                if sheet2ColCode[j] == "":
+                    continue
+                # 如果单元格非空，则创建MyData类的实例并将单元格的值存储在money字段中
+                mydata = MyData()
+                mydata.money = cell_value
+                mydata.projectName = projectName[i]
+                mydata.projectCode = projectCode[i]
+                mydata.name = fileName
+                ##            mydata.tag = fileName
+                mydata.borrowing = '借'
+                mydata.typeCode = 1
+                mydata.bumen = bumen
+                mydata.secondType = bumen_type
+                mydata.financeCode = sheet2ColCode[j]
+                detail.append(mydata)
+                print(mydata)
+
+    # 遍历最后的合计一行
+    # for j in range (3, 3):
+    j = 3
+    cell_value = fd.iloc[lastRow - 1, j]
+    ## print(cell_value)
+    if not pd.isna(cell_value):
+        mydata = MyData()
+        mydata.financeCode = sheet2ColCode[j]
+        mydata.borrowing = '借'
+        mydata.name = '结转' + month + bumen + '研发费用'
+        ##  mydata.tag = fileName
+        mydata.bumen = bumen
+        mydata.typeCode = 1
+        mydata.money = cell_value
+        mydata.secondType = bumen_type
+        mydata.projectCode = code_for_bumen[bumen]
+        detail.append(mydata)
+        print(mydata)
+
+    # 处理sheet1
+    fd = pd.read_excel(file_path, sheet_name='汇总表')
+
+    # 列常量
+    if bumen == "工程建设公司" or bumen == "国际公司":
+        sheet1ColCode = ['', '530199', '54010106010101', '5401010601010301', '5401010601010303', '5401010601010304',
+                         '', '5401010601020101', '5401010601020103', '', '54010106010110', '', '540101060301',
+                         '540101060301', '540101060402', '', '', '', '', '', '', '']
+    else:
+        if bumen_type == '管理部门':
+            sheet1ColCode = ['', '530199', '6602010101', '660201010301', '660201010303', '660201010304',
+                             '', '660201020101', '660201020103', '', '6602010110', '', '66020301',
+                             '66020301', '66020402', '', '', '', '', '', '', '']
+        else:
+            sheet1ColCode = ['', '530199', '54010201010101', '5401020101010301', '5401020101010303', '5401020101010304',
+                             '', '5401020101020101', '5401020101020103', '', '54010201010110', '', '540102010301',
+                             '540102010301', '540102010402', '', '', '', '', '', '', '']
+
+    rows, cols = fd.shape
+    index = fd.index
+
+    # 定义最后一行的行号
+    lastRow = rows - 1
+    if bumen == "工程建设公司":
+        for i in range(1, lastRow):
+            for j in range(2, 21):
+                cell_value = fd.iloc[i, j]
+                if not pd.isna(cell_value):
+                    if cell_value == 0:
+                        continue
+                    if sheet1ColCode[j] == "":
+                        continue
+                    if i == 1:
+                        data = MyData()
+                        data.bumen = bumen
+                        data.money = cell_value
+                        data.secondType = bumen_type
+                        data.borrowing = '借'
+                        data.name = fileName
+                        data.financeCode = sheet1ColCode[j]
+                        data.typeCode = 3
+                        if bumen_type != '管理部门':
+                            data.projectCode = code_for_bumen[bumen]
+
+                        if j == 1:
+                            data.borrowing = '贷'
+                            data.typeCode = 2
+                            data.name = '结转' + month + bumen + '研发费用'
+                        detail.append(data)
+                        print(data)
+                    else:
+                        data = MyData()
+                        data.bumen = bumen
+                        data.money = cell_value
+                        data.secondType = bumen_type
+                        data.borrowing = '借'
+                        data.name = fileName
+                        data.financeCode = sheet1ColCode[j]
+                        data.typeCode = 5
+                        data.projectName = fd.iloc[i, 0]
+                        detail.append(data)
+                        print(data)
+    else:
+        for j in range(1, 21):
+            cell_value = fd.iloc[1, j]
+            if not pd.isna(cell_value):
+                if sheet1ColCode[j] == "":
+                    continue
+                if cell_value == 0:
+                    continue
+                data = MyData()
+                data.bumen = bumen
+                data.money = cell_value
+                data.secondType = bumen_type
+                data.borrowing = '借'
+                data.name = fileName
+                data.financeCode = sheet1ColCode[j]
+                data.typeCode = 3
+                if bumen_type != '管理部门':
+                    data.projectCode = code_for_bumen[bumen]
+
+                if j == 1:
+                    data.borrowing = '贷'
+                    data.typeCode = 2
+                    data.name = '结转' + month + bumen + '研发费用'
+                detail.append(data)
+                print(data)
+
+    tag = fileName
+    # (tag=, financeCode=530101010101, borrowing=借, money=15769.03, projectCode=kj2022-s-1zj, projectName=交流输电线路临近房屋电场强度研究, bumen=电网分公司, name=2023年05月份科技费用分摊明细（电网分公司）, typeCode=1,secondType=)
+
+    # fix financeCode=6605 money should be sum not 0
+    sum = 0
+    detaildataframe = pd.DataFrame(data=None,
+                                   columns=["tag", "financeCode", "borrowing", "money", "projectCode", "projectName",
+                                            "bumen", "name", "typeCode", "secondType"])
+    for index in range(0, len(detail)):
+        mydata = detail[index]
+        print(index, detail[index])
+        sum = sum + mydata.money
+        if mydata.financeCode == "6605":
+            print("6605 sum=", sum)
+            mydata.money = sum
+        detaildataframe.loc[index + 1] = [mydata.tag, mydata.financeCode, mydata.borrowing, mydata.money,
+                                          mydata.projectCode, mydata.projectName, mydata.bumen, mydata.name,
+                                          mydata.typeCode, mydata.secondType]
+    # print(detaildataframe)
+    #xlsxfile = str(file_path).replace(".xls", "_原方案.xlsx")
+    uploadfilename=uploaded_file.name
+    xlsxfile = uploadfilename.replace(".xls", "_原方案.xlsx")
+    #print(xlsxfile)
+    detaildataframe.to_excel(xlsxfile, index=False)
+    ######################################################
+    #xlsxforimport = str(file_path).replace(".xls", "_供导入.xlsx")
+    #xlsxforimport = "供导入.xlsx"
+    xlsxforimport = uploadfilename.replace(".xls", "_供导入.xlsx")
+    workbook=load_workbook("供导入模板.xlsx")
+    ws = workbook.active
+
+    wsrowlist=[]
+    for row in detaildataframe.iterrows():
+        #print(digest,kemudict[row[1].financeCode],"【电建】项目",row[1].projectName,row[1].money,"","【电建】组织机构","",row[1].bumen)
+        #print(row)
+        if len(row[1].projectName)>0:
+            projectName=row[1].projectName
+        else:
+            #if row[1].financeCode=="530199":
+            #    projectName=""
+            #else:
+            projectName="国内非单独核算勘测设计项目（研发专用）"
+            projectName=projectdict[row[1].projectCode]
+        if row[1].financeCode in ["530199","54010201010101","5401020101010301", "5401020101010303","5401020101020101","5401020101020103","54010201010110"]:
+            wsrow = [row[1]['name'], kemudict[row[1].financeCode], "【电建】项目", "", projectName, -row[1].money, "",
+                     "【电建】组织机构", "", row[1].bumen, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+                     -row[1].money]
+        else:
+            wsrow = [row[1]['name'], kemudict[row[1].financeCode], "【电建】项目", "", projectName, row[1].money, "",
+                       "【电建】组织机构", "", row[1].bumen, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+                       row[1].money]
+
+        if row[1].financeCode=="530199":
+            wsrow[2]=""  #项目
+            wsrow[4] = ""
+            wsrow[7] = ""
+            wsrow[9] = ""
+        print(wsrow)
+        wsrowlist.append(wsrow)
+        ws.append(wsrow)
+    workbook.save(xlsxforimport)
+    return xlsxfile,xlsxforimport
+
+kemudict={"530101010101":"研发支出\费用化支出\直接从事研发活动的在职人员费用\短期薪酬\工资","53010101010301":"研发支出\费用化支出\直接从事研发活动的在职人员费用\短期薪酬\社会保险\基本医疗保险","53010101010303":"研发支出\费用化支出\直接从事研发活动的在职人员费用\短期薪酬\社会保险\工伤保险金",
+          "53010101020101":"研发支出\费用化支出\直接从事研发活动的在职人员费用\离职后福利\设定提存计划\基本养老保险","53010101020103":"研发支出\费用化支出\直接从事研发活动的在职人员费用\离职后福利\设定提存计划\失业保险金","530101010110":"研发支出\费用化支出\直接从事研发活动的在职人员费用\短期薪酬\住房公积金",
+          "5301010302":"研发支出\费用化支出\专门用于研发活动的有关折旧费\设备","6605":"研发费用","530199":"研发支出\结转","54010201010101":"合同履约成本\劳务成本\基本劳务成本\人工费\短期薪酬\工资","5401020101010301":"合同履约成本\劳务成本\基本劳务成本\人工费\短期薪酬\社会保险\基本医疗保险",
+          "5401020101010303":"合同履约成本\劳务成本\基本劳务成本\人工费\短期薪酬\社会保险\工伤保险金","5401020101020101":"合同履约成本\劳务成本\基本劳务成本\人工费\离职后福利\设定提存计划\基本养老保险","5401020101020103":"合同履约成本\劳务成本\基本劳务成本\人工费\离职后福利\设定提存计划\失业保险金",
+          "54010201010110":"合同履约成本\劳务成本\基本劳务成本\人工费\短期薪酬\住房公积金","540102010301":"合同履约成本\劳务成本\基本劳务成本\折旧费\固定资产","540102010402":"合同履约成本\劳务成本\基本劳务成本\摊销费\无形资产摊销","53010106":"","54010106010101":"","5401010601010301":"","5401010601010303":"","5401010601020101":"",
+          "5401010601020103":"","54010106010110":"","540101060301":""}
+projectdict={"GNFDUHS00001":"国内非单独核算勘测设计项目（电网分公司专属）","GNFDUHS00011":"国内非单独核算勘测设计项目（研发专用）","GNFDUHS00007":"国内非单独核算勘测设计项目（发电分公司/节能环保分公司专属）","GNFDUHS00004":"国内非单独核算勘测设计项目（工程数字中心专属）","GNFDUHS00002":"国内非单独核算勘测设计项目（国际公司专属）",
+             "GNFDUHS00003":"国内非单独核算勘测设计项目（技术经济中心专属）","GNFDUHS00009":"国内非单独核算勘测设计项目（勘测分公司/地理信息中心专属）","GNFDUHS00005":"国内非单独核算勘测设计项目（系统规划中心专属）","GNFDUHS00006":"国内非单独核算勘测设计项目（新能源分公司专属）","GNZCB00001":"国内总包待分摊项目（公共使用）"}
+
+
+
+
+def preview_excel(file):
+    # 读取Excel文件，将NaN值替换为空字符串，并获取前10行数据pd.read_excel(file).fillna('').head(10).iloc[1:]
+    df = pd.read_excel(file)
+    return df
+
+
+def clean_up_files(file_a, file_b):
+    """
+    用于在程序退出时删除生成的临时文件
+    """
+    if os.path.exists(file_a):
+        os.remove(file_a)
+    if os.path.exists(file_b):
+        os.remove(file_b)
+
+st.title("SEDC科技费用分摊")
+
+# 文件上传组件
+uploaded_file = st.file_uploader("上传Excel文件", type=["xls"])
+
+if uploaded_file is not None:
+
+    # 处理文件并获取新生成的文件名
+    file_a, file_b = process(uploaded_file)
+    preview_df = preview_excel(file_a)
+    preview_df = preview_df.where(pd.notnull(preview_df), '')
+    st.write(preview_df)
+
+    col1, col2  = st.columns(2)
+    with col1:
+        st.download_button(
+            label="下载分摊表",
+            data=open(file_a, "rb").read(),
+            file_name=file_a
+        )
+    with col2:
+        st.download_button(
+            label="下载导入版",
+            data=open(file_b, "rb").read(),
+            file_name=file_b
+        )
+    clean_up_files(file_a, file_b)
+    st.markdown(
+        """
+        <style>
+       .server-warning {
+            color: red;
+            font-size: 14px;
+        }
+        </style>
+        <p class="server-warning">服务器不会保存文件，关闭页面后您上传的文件和处理后的文件均会自动删除。</p>
+        """,
+        unsafe_allow_html=True
+    )
+
+
